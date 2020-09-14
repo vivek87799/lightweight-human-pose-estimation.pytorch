@@ -233,7 +233,7 @@ if __name__ == '__main__':
                        This is just for quick results preview.
                        Please, consider c++ demo for the best performance.''')
     parser.add_argument('-src','--src', type=int, required=True, help='video source')
-    parser.add_argument('-openvino_flag','--openvino_flag', type=bool, default=False, required=False, help='Set openvino flag')
+    parser.add_argument('-openvino_flag','--openvino_flag', action='store_true', default=False, required=False, help='Set openvino flag')
     parser.add_argument('--checkpoint-path', type=str, required=False, help='True. Inference without openvino toolkit, path to the checkpoint')
     parser.add_argument('--height-size', type=int, default=256, help='network input layer height size')
     parser.add_argument('--width_size', type=int, default=456, help='network input layer width size')
