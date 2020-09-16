@@ -3,3 +3,4 @@ __pycache__
 .idea/
 openvino_model/
 pretrained_model/
+reid_data/
