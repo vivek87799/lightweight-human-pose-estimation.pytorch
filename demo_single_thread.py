@@ -12,7 +12,6 @@ from person_reid.person_reid import PersonReid
 import torch
 
 from threading import Thread
-
 from mqtt_manager.tojson import ToJson
 from mqtt_manager.mqtt_client import MqttClient
 
