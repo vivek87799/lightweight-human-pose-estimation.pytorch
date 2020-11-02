@@ -39,7 +39,8 @@ class PersonReid():
         self.model.eval()
 
     def extract_features(self, imgs):
-        imgs = torch.nn.functional.interpolate(imgs, size=(256, 128))
+        # expected imgs shape (N, 3, h, w)
+        imgs = torch.nn.functional.interpolate(imgs, size=(256, 128), mode='nearest')
         if torch.cuda.is_available():
             imgs = imgs.cuda()
         print("input shape -->", imgs.shape, type(imgs))

@@ -4,7 +4,10 @@ import numpy as np
 from modules.keypoints import BODY_PARTS_KPT_IDS, BODY_PARTS_PAF_IDS
 from modules.one_euro_filter import OneEuroFilter
 
-
+BODY_PARTS_KPT_IDS_14 = [[1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [1, 11],
+                      [11, 12], [12, 13], [1, 0]]
+BODY_PARTS_PAF_IDS_14 = ([12, 13], [20, 21], [14, 15], [16, 17], [22, 23], [24, 25], [0, 1], [2, 3], [4, 5],
+                      [6, 7], [8, 9], [10, 11], [18, 19])
 class Pose:
     num_kpts = 18
     kpt_names = ['nose', 'neck',
@@ -24,6 +27,7 @@ class Pose:
         self.confidence = confidence
         self.bbox = Pose.get_bbox(self.keypoints)
         self.id = None
+        self.feature_matrix = []
         self.filters = [[OneEuroFilter(), OneEuroFilter()] for _ in range(Pose.num_kpts)]
 
     @staticmethod
@@ -35,6 +39,7 @@ class Pose:
                 continue
             found_keypoints[found_kpt_id] = keypoints[kpt_id]
             found_kpt_id += 1
+        # x, y, w, h
         bbox = cv2.boundingRect(found_keypoints)
         return bbox
 
@@ -54,6 +59,24 @@ class Pose:
                 x_a, y_a = self.keypoints[kpt_a_id]
                 cv2.circle(img, (int(x_a), int(y_a)), 3, Pose.color, -1)
             kpt_b_id = BODY_PARTS_KPT_IDS[part_id][1]
+            global_kpt_b_id = self.keypoints[kpt_b_id, 0]
+            if global_kpt_b_id != -1:
+                x_b, y_b = self.keypoints[kpt_b_id]
+                cv2.circle(img, (int(x_b), int(y_b)), 3, Pose.color, -1)
+            if global_kpt_a_id != -1 and global_kpt_b_id != -1:
+                cv2.line(img, (int(x_a), int(y_a)), (int(x_b), int(y_b)), Pose.color, 2)
+    
+    def draw_14keypoints(self, img):
+        # To be used after the no. of keypoints are changed
+        assert self.keypoints.shape == (14, 2)
+
+        for part_id in range(len(BODY_PARTS_PAF_IDS_14)):
+            kpt_a_id = BODY_PARTS_KPT_IDS_14[part_id][0]
+            global_kpt_a_id = self.keypoints[kpt_a_id, 0]
+            if global_kpt_a_id != -1:
+                x_a, y_a = self.keypoints[kpt_a_id]
+                cv2.circle(img, (int(x_a), int(y_a)), 3, Pose.color, -1)
+            kpt_b_id = BODY_PARTS_KPT_IDS_14[part_id][1]
             global_kpt_b_id = self.keypoints[kpt_b_id, 0]
             if global_kpt_b_id != -1:
                 x_b, y_b = self.keypoints[kpt_b_id]
