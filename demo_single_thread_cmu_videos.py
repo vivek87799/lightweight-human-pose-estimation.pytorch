@@ -205,6 +205,8 @@ class VideoInfer:
                     pose = Pose(pose_keypoints, pose_entries[n][18])
                     # find the median of left hip and right hip and add the center position
                     pose.keypoints = pose.keypoints[:14]
+                    # Assigning an initial pose id
+                    pose.id = n
                     current_poses.append(pose)
 
                 feature_vectors = None
@@ -284,7 +286,6 @@ class VideoInfer:
                 # Step 2: First frame's feature vectors are taken as querry frame
                     if not qf_set:
                         qf = feature_vectors
-                        print("decice key.. ", len(poses_all.keys()), device, poses_all.keys())
                         qf_keypoints_np = poses_all[device]
                         print("setting qf", torch.sum(qf))
                         qf_set = True
