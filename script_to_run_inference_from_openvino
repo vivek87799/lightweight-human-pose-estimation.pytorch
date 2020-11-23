@@ -1,0 +1,1 @@
+python scripts/demo_inference_OpenVino.py -m openvino_model/human-pose-estimation.xml --checkpoint-path pretrained_model/checkpoint_iter_370000.pth -src 2 -openvino_flag -d MYRIAD

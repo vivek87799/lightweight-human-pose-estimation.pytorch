@@ -146,6 +146,7 @@ class VideoInfer:
         self.mqtt_client = MqttClient()
         self.feature_vectors = {}
         self.calibration_info_devices = calibration_info_devices
+        self.reid_images_all = None
 
     def start(self):
         Thread(target=self.infer, args=()).start()
@@ -172,6 +173,8 @@ class VideoInfer:
             camera_pose = []
             empty_frame_flag = False
             estimate_3d_pose_flag = False
+            reid_images_all = {}
+            reid_images = []
             for k, (device, frames) in enumerate(images.items()):
                 img = frames
                 # img = frames[rs.stream.color]
@@ -225,17 +228,26 @@ class VideoInfer:
                         # TODO implement module to get the feature vector for each person detected
                         # Step 1: Using pose guided cropping strategy get the persons in the frame
                         # bbox gives x, y, w, h
+                        print(img.shape)
                         img_cropped = torch.from_numpy(img[pose.bbox[1]:pose.bbox[1]+pose.bbox[3], pose.bbox[0]:pose.bbox[0]+pose.bbox[2], :]).cuda()
                         img_cropped = img_cropped.permute(2, 1, 0).unsqueeze(dim=0).type(torch.FloatTensor)
+                        img_cropped = torch.nn.functional.interpolate(img_cropped, size=(256, 128), mode='nearest')
                         # print(img[pose.bbox[0]:pose.bbox[0]+pose.bbox[2], pose.bbox[0]:pose.bbox[0]+pose.bbox[3], :].shape)
                         # convert the image to tensor and move to cuda 
                         # Step 2: Extract features for each person  using extract_features() function, takes input height 256, width 128
                         # self.feature_vectors[device] = self.person_reid.extract_features(img_cropped)
                         # self.pose3d_json[device] = ToJson(1, pixel_to_camera_coordinate(pose.keypoints, self.intrinsics_devices[device], depth_frame, self.depth_scale)).toJson()
+                        # Save the cropped images for visualization 
+                        img_cropped_numpy = img_cropped.numpy().squeeze()
+                        img_cropped_numpy = np.transpose(img_cropped_numpy, (1, 2, 0))
+                        print(img_cropped_numpy.shape)
+                        reid_images.append(img_cropped_numpy)
                         if feature_vectors is not None:
                             feature_vectors = torch.cat((feature_vectors, self.person_reid.extract_features(img_cropped)))
                         else:
                             feature_vectors = self.person_reid.extract_features(img_cropped)
+                reid_images_all[device] = reid_images
+                
                 # feature_vectors is assigned only when not of self.args.stereo
                 if feature_vectors is not None:
                     # Get the feature vector of all the detected persons
@@ -269,6 +281,7 @@ class VideoInfer:
                     continue
                 # cv2.imshow('Lightweight Human Pose Estimation Python Demo', img)
                 # cv2.waitKey(1)
+            self.reid_images_all = reid_images_all
             self.frame_vis = frame_vis
 
             # TODO 
@@ -502,4 +515,5 @@ if __name__ == '__main__':
             frame_vis = video_infer.frame_vis.copy()
             # pose_pub.pose3d_json = video_infer.pose3d_json
             cv2.imshow("vis", np.hstack(tuple(frame_vis)))
+        
         cv2.waitKey(1)
