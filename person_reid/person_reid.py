@@ -40,10 +40,10 @@ class PersonReid():
 
     def extract_features(self, imgs):
         # expected imgs shape (N, 3, h, w)
-        imgs = torch.nn.functional.interpolate(imgs, size=(256, 128), mode='nearest')
+        # imgs = torch.nn.functional.interpolate(imgs, size=(256, 128), mode='nearest')
         if torch.cuda.is_available():
             imgs = imgs.cuda()
-        print("input shape -->", imgs.shape, type(imgs))
+        # print("input shape -->", imgs.shape, type(imgs))
         return self.model(imgs).data.cpu()
 
     def compute_distance_matrix(self, qf, gf, dist_metric='euclidean'):
