@@ -10,6 +10,9 @@ import concurrent.futures
 import cv2
 import numpy as np
 
+from sklearn.preprocessing import Normalizer
+from tracking.tracker1 import Tracker
+
 ######################################For Transformation######################################
 class Transformation:
     def __init__(self, rotation_matrix, translation_vector):
@@ -96,7 +99,7 @@ def processing_loop(calib_file_name="cmu_haggle", type="", name=""):
 ########################################################################################################################################
 
 #################################################Get the 3D pose using triangulation####################################################
-def depth_from_triangulation(camera_pose, qf_keypoints, gf_keypoints):
+def depth_from_triangulation(camera_pose, qf_keypoints, gf_keypoints, skeleton_ID_tracker=None):
     """
     Takes a list of camera_pose and corresponding key_points and returns the 3D coordinates
     camera_pose - n x 3 x 4
@@ -107,17 +110,35 @@ def depth_from_triangulation(camera_pose, qf_keypoints, gf_keypoints):
     try:
         # TODO modifiy to handle more than two cameras
         points_3d = []
-        print(qf_keypoints.shape, gf_keypoints.shape)
         for i in range(0, len(camera_pose)-1):
-            print(np.array(camera_pose[0]))
-            print(camera_pose[0].shape)
             x = cv2.triangulatePoints(np.array(camera_pose[0]), np.array(camera_pose[i + 1]), qf_keypoints.transpose(),
                                       gf_keypoints.transpose())
             x /= x[3]
             x = x[:3]
+            # Changing units to mts
+            x = x/100
+            # Rotate the points to ros coordinates
+            
+            rot_optical_coord_to_ros_coord = np.array(([[0.0000000, 1.0000000, 0.0000000],
+                                                [1.0000000, 0.0000000, 0.0000000],
+                                                [0.0000000, 0.0000000, -1.0000000]]))
+            rot_optical_coord_to_ros_coord = np.array(([[0.0000000, 0.0000000, 1.0000000],
+                                                [-1.0000000, 0.0000000, 0.0000000],
+                                                [0.0000000, -1.0000000, 0.0000000]]))
+            x = np.matmul(rot_optical_coord_to_ros_coord, x)
+            # transformer = Normalizer().fit(x)
+            # x = transformer.transform(x)
+            detection = np.mean(x, axis=1).reshape(3,1)
+            # skeleton_ID_tracker.Update3d([detection])
+            # mask for query and gallery frame
+            mask1 = np.tile((qf_keypoints.transpose()[0]==-1), (3,1))
+            mask2 = np.tile((gf_keypoints.transpose()[0]==-1), (3,1))
+            x[mask1] = -1
+            x[mask2] = -1
+            # print("mean in axis 0", np.mean(x, axis=0))
+            # print("mean in axis 1", np.mean(x, axis=1))
             points_3d.extend(x)
-        print("points 3d -->", np.array(points_3d).shape)
-        return points_3d
+        return detection, points_3d
     except Exception as error:
         print("ERROR in depth_from_triangulation module ", error)
 ########################################################################################################################################
