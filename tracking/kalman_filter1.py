@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 def tracker1():
     tracker = KalmanFilter(dim_x=4, dim_z=2)
     dt = 0.2   # time step
-
     tracker.F = np.array([[1.0, 0.0, 0.0, dt, 0.0, 0.0],
                           [0.0, 1.0, 0.0, 0.0, dt, 0.0],
                           [0.0, 0.0, 1.0, 0.0, 0.0, dt],
@@ -35,6 +34,7 @@ def tracker1():
 
 tracker = KalmanFilterpy(dim_x=6, dim_z=3)
 dt = 0.2
+dt = 0.03
 
 tracker.F = np.array([[1.0, 0.0, 0.0, dt, 0.0, 0.0],
                            [0.0, 1.0, 0.0, 0.0, dt, 0.0],

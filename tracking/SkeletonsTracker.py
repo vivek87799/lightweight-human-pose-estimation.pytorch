@@ -1,14 +1,15 @@
-# Import python libraries
 import numpy as np
-from tracking.kalman_filter1 import KalmanFilter
+
 from scipy.optimize import linear_sum_assignment
 
+from tracking.kalman_filter1 import KalmanFilter
+from tracking.tracker1 import Tracker, Track
 
 class Track(object):
     """Track class for every object to be tracked
     """
 
-    def __init__(self, prediction, trackIdCount):
+    def __init__(self, prediction=None, joints=None, trackIdCount=None):
         """Initialize variables used by Track class
         Args:
             prediction: predicted centroids of object to be tracked
@@ -24,12 +25,30 @@ class Track(object):
         self.skipped_frames = 0  # number of frames skipped undetected
         self.min_hits = 0
         self.trace = []  # trace path
-        self.trace3d = []  # trace 3d path
+        self.trace3d = []  # trace 3d path or joints_centre
         self.detection = prediction
-        
+        self.joints = joints
+
+class Skeleton(object):
+    def __init__(self, joints=None, mask=None):
+        """
+        joints: 3xN numpy array
+        """
+        self.joints = joints 
+        self.joints_centre = None
+    
+    def add_joints(self, joints, mask=None):
+        self.joints = joints/10
+        print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
+        print("joints==", self.joints)
+        self.joints[mask] = np.nan
+        print("joints==", self.joints)
+        print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
+        self.joints_centre = np.nanmean(self.joints, axis=1).reshape(3,1)
+        self.joints[mask] = -1
 
 
-class Tracker(object):
+class SkeletonsTracker(object):
     """Tracker class that updates track vectors of object tracked
 
     """
@@ -54,7 +73,7 @@ class Tracker(object):
         self.tracks3d = []
         self.trackIdCount = trackIdCount
 
-    def Update(self, detections, min_hit_criteria=50):
+    def Update(self, skeletons, min_hit_criteria=10):
         """Update tracks vector using following steps:
             - Create tracks if no tracks vector found
             - Calculate cost using sum of square distance
@@ -73,10 +92,14 @@ class Tracker(object):
             None
         """
 
+        detections = []
+        for skeleton in skeletons:
+            print("joints centre", skeleton.joints_centre)
+            detections.append(skeleton.joints_centre)
         # Create tracks if no tracks vector found
         if len(self.tracks3d) == 0:
             for i in range(len(detections)):
-                track = Track(detections[i], self.trackIdCount)
+                track = Track(prediction=skeletons[i].joints_centre, joints=skeletons[i].joints, trackIdCount=self.trackIdCount)
                 
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
@@ -116,7 +139,9 @@ class Tracker(object):
             ## To keep the measure value
             # TODO
             ## Read the KF params and please remove the below line as it is already stored some where
-            self.tracks3d[i].detection = np.asarray(detections[assignment[i]])
+            # self.tracks3d[i].detection = np.asarray(detections[assignment[i]])
+            self.tracks3d[i].detection = np.asarray(skeletons[assignment[i]].joints_centre)
+            self.tracks3d[i].joints = np.asarray(skeletons[assignment[i]].joints)
             if assignment[i] != -1:
                 # check for cost distance threshold.
                 # If cost is very high then un_assign (delete) the track
@@ -154,8 +179,7 @@ class Tracker(object):
         # Start new tracks
         if len(un_assigned_detects) != 0:
             for i in range(len(un_assigned_detects)):
-                track = Track(detections[un_assigned_detects[i]],
-                              self.trackIdCount)
+                track = Track(prediction=skeletons[un_assigned_detects[i]].joints_centre, joints=skeletons[un_assigned_detects[i]].joints, trackIdCount=self.trackIdCount)
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
 
@@ -181,3 +205,5 @@ class Tracker(object):
 
             self.tracks3d[i].trace.append(self.tracks3d[i].prediction)
             self.tracks3d[i].KF.lastResult = self.tracks3d[i].prediction
+
+    
