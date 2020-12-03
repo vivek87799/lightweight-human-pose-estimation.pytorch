@@ -121,13 +121,7 @@ def depth_from_triangulation(camera_pose, qf_keypoints, gf_keypoints):
             # x = x/10
             # Rotate the points to ros coordinates
             
-            rot_optical_coord_to_ros_coord = np.array(([[0.0000000, 1.0000000, 0.0000000],
-                                                [1.0000000, 0.0000000, 0.0000000],
-                                                [0.0000000, 0.0000000, -1.0000000]]))
-            rot_optical_coord_to_ros_coord = np.array(([[0.0000000, 0.0000000, 1.0000000],
-                                                [-1.0000000, 0.0000000, 0.0000000],
-                                                [0.0000000, -1.0000000, 0.0000000]]))
-            x = np.matmul(rot_optical_coord_to_ros_coord, x)
+            
             # transformer = Normalizer().fit(x)
             # x = transformer.transform(x)
             

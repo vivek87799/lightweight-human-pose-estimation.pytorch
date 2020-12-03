@@ -306,10 +306,8 @@ class VideoInfer:
         self.frame_vis = frame_vis
 
         # TODO 
-        print("len of poses-->", len(poses_all.keys()))
         len_poses = len(poses_all.keys())
         if (len(poses_all.keys()) < 2):
-            print("len of poses in if-->", len(poses_all.keys()))
             empty_frame_flag = True
             return
         if not empty_frame_flag:
@@ -354,22 +352,20 @@ class VideoInfer:
                     ### qf_keypoints_np = qf_keypoints_np[gf_ids]
                 
                 # TODO correct implementation
-                """
+                # """
                 gf_ids = col_ind
                 qf_ids = row_ind
                 qf_keypoints_np = qf_keypoints_np[[k for k in row_ind]]
                 gf_keypoints_np = gf_keypoints_np[[k for k in col_ind]]
-                """
-                print("min values-->",gf_ids.tolist(), type(self.reid_images_all[device]))
-                print(len(self.reid_images_all[device]))
+                # """
                 try:
-                    gf_keypoints_np = gf_keypoints_np[gf_ids]
+                    # gf_keypoints_np = gf_keypoints_np[gf_ids]
                     self.reid_images_all[device] = np.asarray(self.reid_images_all[device])[gf_ids] # .tolist()
                 except Exception as error:
                     print("Erro in reordering", error)
                 # print(self.reid_images_all[device].shape)
             # Step 7: Find the 3D pose using triangulation 
-            qf_keypoints_np = qf_keypoints_np[[k for k in range(gf_keypoints_np.shape[0])]]
+            # qf_keypoints_np = qf_keypoints_np[[k for k in range(gf_keypoints_np.shape[0])]]
             pose_3d_json = SkeletonPoseToJson()
             skeleton_ID_tracker_json = SkeletonIDTrackerToJson()
             detections = []
@@ -379,15 +375,15 @@ class VideoInfer:
                 # detections.append(skeleton.joints_centre)
                 skeletons.append(skeleton)
                 # skeleton.joints is None if not assigned
-                if type(skeleton.joints) is np.ndarray: 
-                    pose_3d_json.add_pose(k, np.transpose(skeleton.joints))
+                # if type(skeleton.joints) is np.ndarray: 
+                #     pose_3d_json.add_pose(k, np.transpose(skeleton.joints))
             
-            #### pose_3d_json = SkeletonPoseToJson()
+            ##  pose_3d_json = SkeletonPoseToJson()
             # Update the Kalman Filter
             self.skeletons_tracker.Update(skeletons)
             for i, track in enumerate(self.skeletons_tracker.tracks3d):
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
-                #### pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
+                pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
 
             self.pose3d_json = pose_3d_json.toJson()
             self.skeleton_ID_tracker_json = skeleton_ID_tracker_json.toJson()

@@ -81,14 +81,14 @@ class KalmanFilter(object):
         # tracker.u = 0.
         q = Q_discrete_white_noise(dim=3, dt=dt, var=0.001)
         self.kf.Q = block_diag(q, q)
-        print("Process noise matrix", self.kf.Q)
+        # print("Process noise matrix", self.kf.Q)
 
         self.kf.H = np.array([[1, 0, 0, 0, 0, 0],
                               [0, 0, 1, 0, 0, 0],
                               [0, 0, 0, 0, 1, 0]])
         # self.kf.R = np.diag((0.01, 0.01, 0.01)) # observation noise matrix
         self.kf.R = np.diag((1, 1, 1))
-        print("observation noise matrix", self.kf.R)
+        # print("observation noise matrix", self.kf.R)
         self.kf.x = np.array([[0, 0, 0, 0, 0, 0]]).T
         self.kf.P = np.eye(6) * 4
         self.last_result = 0.0

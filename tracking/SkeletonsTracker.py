@@ -3,7 +3,8 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from tracking.kalman_filter1 import KalmanFilter
-from tracking.tracker1 import Tracker, Track
+from tracking.tracker1 import Tracker as JointsTracker
+from tracking.tracker1 import Track as JointTrack
 
 class Track(object):
     """Track class for every object to be tracked
@@ -28,6 +29,22 @@ class Track(object):
         self.trace3d = []  # trace 3d path or joints_centre
         self.detection = prediction
         self.joints = joints
+        self.joints_tracker = None
+        self.updateJoints(5, 10, 5, 1) # Should be a list of tracks
+    
+    def updateJoints(self, dist_thresh=None, max_frames_to_skip=None, max_trace_length=None, trackIdCount=None):
+        if not self.joints_tracker:
+            self.joints_tracker = JointsTracker(dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount)
+        detections = []
+        for detection in self.joints.transpose().tolist():
+            detections.append(np.asarray(detection).reshape(3, 1))
+        self.joints_tracker.Update(detections)
+    
+    def getJoints(self):
+        # parse self.joints_tracker
+        pass
+        
+
 
 class Skeleton(object):
     def __init__(self, joints=None, mask=None):
@@ -39,16 +56,15 @@ class Skeleton(object):
     
     def add_joints(self, joints, mask=None):
         self.joints = joints/10
-        print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
-        print("joints==", self.joints)
+        rot_optical_coord_to_ros_coord = np.array(([[0.0000000, 0.0000000, 1.0000000],
+                                                [-1.0000000, 0.0000000, 0.0000000],
+                                                [0.0000000, -1.0000000, 0.0000000]]))
+        self.joints = np.matmul(rot_optical_coord_to_ros_coord, self.joints)
         self.joints[mask] = np.nan
-        print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
-        print("joints==", self.joints)
         
         # Replace nan with 0 in both the joints and joints_centre
         self.joints_centre = np.nan_to_num(np.nanmean(self.joints, axis=1).reshape(3,1))
         self.joints = np.nan_to_num(self.joints)
-        
         
         self.joints[mask] = -1
 
@@ -92,14 +108,13 @@ class SkeletonsTracker(object):
             - Start new tracks
             - Update KalmanFilter state, lastResults and tracks trace
         Args:
-            detections: detected centroids of object to be tracked
+            Skeleton: Create a Skeleton object with joints from SkeletonsTracker.py
         Return:
             None
         """
 
         detections = []
         for skeleton in skeletons:
-            print("joints centre", skeleton.joints_centre)
             detections.append(skeleton.joints_centre)
         # Create tracks if no tracks vector found
         if len(self.tracks3d) == 0:
@@ -146,7 +161,10 @@ class SkeletonsTracker(object):
             ## Read the KF params and please remove the below line as it is already stored some where
             # self.tracks3d[i].detection = np.asarray(detections[assignment[i]])
             self.tracks3d[i].detection = np.asarray(skeletons[assignment[i]].joints_centre)
+            # self.tracks3d[i].joints = np.asarray(skeletons[assignment[i]].joints)
             self.tracks3d[i].joints = np.asarray(skeletons[assignment[i]].joints)
+            # Update the joints_tracker
+            self.tracks3d[i].updateJoints()
             if assignment[i] != -1:
                 # check for cost distance threshold.
                 # If cost is very high then un_assign (delete) the track
@@ -210,5 +228,3 @@ class SkeletonsTracker(object):
 
             self.tracks3d[i].trace.append(self.tracks3d[i].prediction)
             self.tracks3d[i].KF.lastResult = self.tracks3d[i].prediction
-
-    
