@@ -46,7 +46,10 @@ class PersonReid():
         # print("input shape -->", imgs.shape, type(imgs))
         return self.model(imgs).data.cpu()
 
-    def compute_distance_matrix(self, qf, gf, dist_metric='euclidean'):
+    def compute_distance_matrix(self, qf, gf, dist_metric='cosine'):
+        """
+        dist_metric can be "cosine" or "euclidean"
+        """
         return metrics.compute_distance_matrix(qf, gf, dist_metric)
 
 """

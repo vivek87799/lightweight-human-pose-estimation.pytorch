@@ -42,9 +42,14 @@ class Skeleton(object):
         print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
         print("joints==", self.joints)
         self.joints[mask] = np.nan
-        print("joints==", self.joints)
         print("joints -->", np.nanmean(self.joints, axis=1).reshape(3,1))
-        self.joints_centre = np.nanmean(self.joints, axis=1).reshape(3,1)
+        print("joints==", self.joints)
+        
+        # Replace nan with 0 in both the joints and joints_centre
+        self.joints_centre = np.nan_to_num(np.nanmean(self.joints, axis=1).reshape(3,1))
+        self.joints = np.nan_to_num(self.joints)
+        
+        
         self.joints[mask] = -1
 
 

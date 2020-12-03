@@ -27,7 +27,7 @@ from modules.load_state import load_state
 from modules.pose import Pose, track_poses
 from val import normalize, pad_width
 
-from tracking.tracker1 import Tracker
+from tracking.SkeletonsTracker import SkeletonsTracker
 
 
 class VideoGet:
@@ -66,7 +66,7 @@ class VideoGetCMU:
             self.caps.append(cv2.VideoCapture(stream))
         # Start from 12400 fro visualization
         # for i in range(0, 13400):
-        for i in range(0, 18000):
+        for i in range(0, 1800):
             for cap in self.caps:
                 ret, frame = cap.read()
             self.frame_count = self.frame_count+1
@@ -119,7 +119,7 @@ class VideoGetCMU:
 
 
 class VideoInfer:
-    def __init__(self, args, frames_np=None, calibration_info_devices=None, skeletonIDTracker=None):
+    def __init__(self, args, frames_np=None, calibration_info_devices=None, skeletonsTracker=None):
         print("infer thread..")
         self.args = args
         self.cpu = self.args.cpu
@@ -131,7 +131,7 @@ class VideoInfer:
         self.intrinsics_devices = None
         self.depth_scale = 0
         self.pose3d_json = {}
-        self.skeleton_ID_tracker = skeletonIDTracker
+        self.skeletons_tracker = skeletonsTracker
 
         self.net = PoseEstimationWithMobileNet()
         self.checkpoint = torch.load(self.args.checkpoint_path, map_location='cpu')
@@ -330,7 +330,7 @@ class VideoInfer:
                 print("input shapes-->", qf.shape, feature_vectors.shape)
                 distmat = self.person_reid.compute_distance_matrix(qf, feature_vectors) 
                 print("distmat", distmat)
-            # Step 4: get the min arg(np.argmin(distance_matrix, dim=1)) and value(np.amin(distance_matrix, dim=1)) from distance matrix 
+            # Step 4: Use Hungarian min algorithm to find the optimal solution from distance matrix 
                 row_ind, col_ind = linear_sum_assignment(distmat)
                 print("row_ind-->", row_ind)
                 print("col_ind-->", col_ind)
@@ -340,7 +340,7 @@ class VideoInfer:
                     
                     gf_ids = distmat.argmin(dim=1) 
                     gf_ids = col_ind 
-            ## Step 5: Reorder the poses in the gallery frame
+                ## Step 5: Reorder the poses in the gallery frame
                     print(type(gf_keypoints_np), len(gf_keypoints_np), gf_keypoints_np.shape, gf_ids)
                     #### gf_keypoints_np = gf_keypoints_np[gf_ids]
                     print(type(gf_keypoints_np), len(gf_keypoints_np), gf_keypoints_np.shape)
@@ -352,7 +352,14 @@ class VideoInfer:
                     # print(type(gf_keypoints_np), len(gf_keypoints_np), gf_keypoints_np.shape, gf_ids)
             ## Step 6: Reorder the poses in the query frame
                     ### qf_keypoints_np = qf_keypoints_np[gf_ids]
-                    
+                
+                # TODO correct implementation
+                """
+                gf_ids = col_ind
+                qf_ids = row_ind
+                qf_keypoints_np = qf_keypoints_np[[k for k in row_ind]]
+                gf_keypoints_np = gf_keypoints_np[[k for k in col_ind]]
+                """
                 print("min values-->",gf_ids.tolist(), type(self.reid_images_all[device]))
                 print(len(self.reid_images_all[device]))
                 try:
@@ -366,31 +373,24 @@ class VideoInfer:
             pose_3d_json = SkeletonPoseToJson()
             skeleton_ID_tracker_json = SkeletonIDTrackerToJson()
             detections = []
+            skeletons = []
             for k in range(0, qf_keypoints_np.shape[0]):
-                detection, pose_3d = depth_from_triangulation(camera_pose_all_np, qf_keypoints_np[k].astype(np.float32), gf_keypoints_np[k].astype(np.float32), self.skeleton_ID_tracker)
-                detections.append(detection)
-                if pose_3d: 
-                    pose_3d_json.add_pose(k, np.transpose(np.array(pose_3d)))
+                skeleton = depth_from_triangulation(camera_pose_all_np, qf_keypoints_np[k].astype(np.float32), gf_keypoints_np[k].astype(np.float32))
+                # detections.append(skeleton.joints_centre)
+                skeletons.append(skeleton)
+                # skeleton.joints is None if not assigned
+                if type(skeleton.joints) is np.ndarray: 
+                    pose_3d_json.add_pose(k, np.transpose(skeleton.joints))
             
-            print("Length of the tracker====>", len(self.skeleton_ID_tracker.tracks3d))
-            for i, track in enumerate(self.skeleton_ID_tracker.tracks3d):
-                print("before track id -->", track.track_id)
-                print("prediction -->", track.prediction.transpose().shape, track.prediction)
-                print("detection-->", track.detection.transpose().shape, track.detection)
+            #### pose_3d_json = SkeletonPoseToJson()
             # Update the Kalman Filter
-            self.skeleton_ID_tracker.Update(detections)
-            print("Length of the tracker====>", len(self.skeleton_ID_tracker.tracks3d))
-            for i, track in enumerate(self.skeleton_ID_tracker.tracks3d):
-                print("after track id -->", track.track_id)
-                print("prediction -->", track.prediction.transpose().shape, track.prediction)
-                print("detection-->", track.detection.transpose().shape, track.detection)
-
+            self.skeletons_tracker.Update(skeletons)
+            for i, track in enumerate(self.skeletons_tracker.tracks3d):
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
+                #### pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
 
             self.pose3d_json = pose_3d_json.toJson()
-            print(self.pose3d_json)
             self.skeleton_ID_tracker_json = skeleton_ID_tracker_json.toJson()
-            print(self.skeleton_ID_tracker_json)
             self.publish()
         self.frame_color = img_all.copy()
 
@@ -491,7 +491,7 @@ if __name__ == '__main__':
     parser.add_argument('--track', type=int, default=1, help='track pose id in video')
     parser.add_argument('--smooth', type=int, default=1, help='smooth pose keypoints')
     parser.add_argument('--stereo', action='store_true', help='Depth from stereo')
-    parser.add_argument('--reid_model', type=str, required=False, default='pretrained_model/resnet50_person_reid.pth', help='reid model path')
+    parser.add_argument('--reid_model', type=str, required=False, default='pretrained_model/osnet_x1_0_market_256x128_person_reid.pth', help='reid model path')
 
     args = parser.parse_args()
 
@@ -526,7 +526,7 @@ if __name__ == '__main__':
     #########
     # video_infer = VideoInfer(args, video_getter_cmu.frames, video_getter.device_manager.calibration_info_devices).start()
 
-    video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonIDTracker=Tracker(0.3, 50, 10, 1))
+    video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonsTracker=SkeletonsTracker(5, 10, 5, 1))
     # video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonIDTracker=Tracker(100, 50, 30, 1))
     # video_infer.intrinsics_devices = video_getter.device_manager.intrinsics_devices
     # video_infer.depth_scale = video_getter.device_manager.depth_scale

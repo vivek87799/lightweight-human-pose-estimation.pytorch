@@ -10,6 +10,8 @@ This repository contains the implementation of 3D Multi-Person pose estimation u
 
 * [Requirements](#requirements)
 * [Prerequisites](#prerequisites)
+* [Working](#working)
+* [v03.12.2020](#v03.12.2020)
 * [v02.12.2020](#v02.12.2020)
 * [Python demo](#python-demo)
 * [Citation](#citation)
@@ -24,16 +26,28 @@ This repository contains the implementation of 3D Multi-Person pose estimation u
 
 1. Install requirements `pip install -r requirements.txt`
 
-## v02.12.2020
-* branch develop/pythongpucmuinference
+## Working
 * The light weight OpenPose is used as a backbone for 2D pose estimation
 * The Feature vector is extracted for each person detected(passing the bounding box as input to a Person Re-Identification deep learning model)
 * We use Hungarian minimization algorithm on the cost matrix between the feature vectors of the detected person on both frames to get the corresponding persons
 * This version of the code uses the kalman filter for tracking the skeleton IDs(The mean of the skeleton joints are tracked)
 * The detected skeleton and the skeleton IDs are published on mqtt to the topics "/pose_cam/triangulate/pose_3d" and "/pose_cam/triangulate/skeletonIDTracker" respectively
 * The published skeleon can be visualized on ROS
+
+## v03.12.2020
+* branch develop/pythongpucmuinference
+* The Re-Identification now uses cosine similarity for cost matrix
+* This module uses a separate Skeleton Tracker which tracks the entire skeleton across the frames. 
+* A bit more stable version
+
+## v02.12.2020
+* branch develop/pythongpucmuinference
+* This version has a separate skeleton tracker 
+
 #### Known issue
 
+* The person Re-Identification model is unstable as the person images are very much occluded.
+* The person Re-Identification model can be imporved by training it on different datasets. 
 
 
 
