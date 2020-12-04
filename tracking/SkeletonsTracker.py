@@ -3,14 +3,15 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from tracking.kalman_filter1 import KalmanFilter
-from tracking.tracker1 import Tracker as JointsTracker
-from tracking.tracker1 import Track as JointTrack
+from tracking.tracker1 import Tracker
 
-class Track(object):
+from tracking.tracker1 import Track as TrackParent
+
+class Track(TrackParent):
     """Track class for every object to be tracked
     """
 
-    def __init__(self, prediction=None, joints=None, trackIdCount=None):
+    def __init__(self, prediction=None, joints=None, trackIdCount=None, measurement_noise=0.1):
         """Initialize variables used by Track class
         Args:
             prediction: predicted centroids of object to be tracked
@@ -18,33 +19,24 @@ class Track(object):
         Return:
             None
         """
-        self.track_id = trackIdCount  # identification of each track object
-        self.KF = KalmanFilter()  # KF instance to track this object
-        self.prediction = np.asarray(prediction)  # predicted centroids (x,y)
-        self.prediction2d = ()  # predicted centroids (x,y)
-        self.prediction3d = ()
-        self.skipped_frames = 0  # number of frames skipped undetected
-        self.min_hits = 0
-        self.trace = []  # trace path
-        self.trace3d = []  # trace 3d path or joints_centre
-        self.detection = prediction
+        TrackParent.__init__(self, prediction, trackIdCount)
         self.joints = joints
         self.joints_tracker = None
-        self.updateJoints(5, 10, 5, 1) # Should be a list of tracks
+        self.updateJoints(1.5, 20, 5, 10) # Should be a list of tracks
     
     def updateJoints(self, dist_thresh=None, max_frames_to_skip=None, max_trace_length=None, trackIdCount=None):
         if not self.joints_tracker:
             self.joints_tracker = JointsTracker(dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount)
         detections = []
         for detection in self.joints.transpose().tolist():
+            # Check if the detection has -1 which indicates that the joint is missing so we 
+            # should not update the detection
+            if (-1 in detection):
+                continue
+            # print("joint detections to be updated", np.asarray(detection).reshape(3, 1))
             detections.append(np.asarray(detection).reshape(3, 1))
         self.joints_tracker.Update(detections)
-    
-    def getJoints(self):
-        # parse self.joints_tracker
-        pass
         
-
 
 class Skeleton(object):
     def __init__(self, joints=None, mask=None):
@@ -68,14 +60,45 @@ class Skeleton(object):
         
         self.joints[mask] = -1
 
+class JointsTracker(Tracker):
+        """
+        Tracker class that updates track vectors of object tracked
+        """
+        def __init__(self, dist_thresh, max_frames_to_skip, max_trace_length,
+                    trackIdCount, measurement_noise=0.005):
+            """Initialize variable used by Tracker class
+            Args:
+                dist_thresh: distance threshold. When exceeds the threshold,
+                            track will be deleted and new track is created
+                max_frames_to_skip: maximum allowed frames to be skipped for
+                                    the track object undetected
+                max_trace_length: trace path history length
+                trackIdCount: identification of each track object
+            Return:
+                None
+            """
+            Tracker.__init__(self, dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount, measurement_noise)
 
-class SkeletonsTracker(object):
+        def get_joints(self):
+            joints = []
+            for track in self.tracks3d:
+                joints.extend(track.prediction.transpose())
+                print("added==>")
+                print("min hits ==>", track.min_hits)
+                print("skipped frames ==>", track.skipped_frames)
+                print("max age ==>", track.max_age)
+                # print(track.prediction.transpose().shape, track.prediction.transpose())
+            # print("track from joints", joints)
+            
+            return np.asarray(joints)
+
+class SkeletonsTracker(Tracker):
     """Tracker class that updates track vectors of object tracked
 
     """
 
     def __init__(self, dist_thresh, max_frames_to_skip, max_trace_length,
-                 trackIdCount):
+                 trackIdCount, measurement_noise=0.10):
         """Initialize variable used by Tracker class
         Args:
             dist_thresh: distance threshold. When exceeds the threshold,
@@ -87,12 +110,7 @@ class SkeletonsTracker(object):
         Return:
             None
         """
-        self.dist_thresh = dist_thresh
-        self.max_frames_to_skip = max_frames_to_skip
-        self.max_trace_length = max_trace_length
-        self.tracks = []
-        self.tracks3d = []
-        self.trackIdCount = trackIdCount
+        Tracker.__init__(self, dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount, measurement_noise)
 
     def Update(self, skeletons, min_hit_criteria=10):
         """Update tracks vector using following steps:
@@ -119,7 +137,7 @@ class SkeletonsTracker(object):
         # Create tracks if no tracks vector found
         if len(self.tracks3d) == 0:
             for i in range(len(detections)):
-                track = Track(prediction=skeletons[i].joints_centre, joints=skeletons[i].joints, trackIdCount=self.trackIdCount)
+                track = Track(prediction=skeletons[i].joints_centre, joints=skeletons[i].joints, trackIdCount=self.trackIdCount, measurement_noise=self.measurement_noise)
                 
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
@@ -202,7 +220,7 @@ class SkeletonsTracker(object):
         # Start new tracks
         if len(un_assigned_detects) != 0:
             for i in range(len(un_assigned_detects)):
-                track = Track(prediction=skeletons[un_assigned_detects[i]].joints_centre, joints=skeletons[un_assigned_detects[i]].joints, trackIdCount=self.trackIdCount)
+                track = Track(prediction=skeletons[un_assigned_detects[i]].joints_centre, joints=skeletons[un_assigned_detects[i]].joints, trackIdCount=self.trackIdCount, measurement_noise=self.measurement_noise)
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
 
@@ -214,8 +232,13 @@ class SkeletonsTracker(object):
                 self.tracks3d[i].skipped_frames = 0
                 # TODO_ with the prediction update the 3d points
                 self.tracks3d[i].KF.correct(detections[assignment[i]], 1)
+                
                 _temp = self.tracks3d[i].KF.kf.x[[0, 2, 4]]
                 self.tracks3d[i].prediction = self.tracks3d[i].KF.kf.x[[0, 2, 4]]
+                """
+                _temp = self.tracks3d[i].KF.kf.x[[0, 1, 2]]
+                self.tracks3d[i].prediction = self.tracks3d[i].KF.kf.x[[0, 1, 2]]
+                """
             else:
                 # TODO_ with the prediction update the 3d points
                 self.tracks3d[i].KF.correct(self.tracks3d[i].KF.kf.x, 0)
@@ -228,3 +251,5 @@ class SkeletonsTracker(object):
 
             self.tracks3d[i].trace.append(self.tracks3d[i].prediction)
             self.tracks3d[i].KF.lastResult = self.tracks3d[i].prediction
+
+    

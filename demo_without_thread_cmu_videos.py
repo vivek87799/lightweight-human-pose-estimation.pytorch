@@ -130,7 +130,8 @@ class VideoInfer:
         self.stopped = False
         self.intrinsics_devices = None
         self.depth_scale = 0
-        self.pose3d_json = {}
+        self.pose3d_predicted_json = {}
+        self.pose3d_measured_json = {}
         self.skeletons_tracker = skeletonsTracker
 
         self.net = PoseEstimationWithMobileNet()
@@ -366,7 +367,7 @@ class VideoInfer:
                 # print(self.reid_images_all[device].shape)
             # Step 7: Find the 3D pose using triangulation 
             # qf_keypoints_np = qf_keypoints_np[[k for k in range(gf_keypoints_np.shape[0])]]
-            pose_3d_json = SkeletonPoseToJson()
+            pose_3d_measured_json = SkeletonPoseToJson()
             skeleton_ID_tracker_json = SkeletonIDTrackerToJson()
             detections = []
             skeletons = []
@@ -375,17 +376,26 @@ class VideoInfer:
                 # detections.append(skeleton.joints_centre)
                 skeletons.append(skeleton)
                 # skeleton.joints is None if not assigned
-                # if type(skeleton.joints) is np.ndarray: 
-                #     pose_3d_json.add_pose(k, np.transpose(skeleton.joints))
+                if type(skeleton.joints) is np.ndarray: 
+                    pose_3d_measured_json.add_pose(k, np.transpose(skeleton.joints))
             
-            ##  pose_3d_json = SkeletonPoseToJson()
+            pose_3d_measured_json = SkeletonPoseToJson()
             # Update the Kalman Filter
             self.skeletons_tracker.Update(skeletons)
             for i, track in enumerate(self.skeletons_tracker.tracks3d):
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
-                pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
+                print("joints from detections", np.transpose(track.joints).shape)
+                pose_3d_measured_json.add_pose(track.track_id, np.transpose(track.joints))
 
-            self.pose3d_json = pose_3d_json.toJson()
+            pose_3d_predicted_json = SkeletonPoseToJson()
+            for track in self.skeletons_tracker.tracks3d:
+                joints = track.joints_tracker.get_joints()
+                print("joints from prediction", joints.shape)
+                pose_3d_predicted_json.add_pose(track.track_id, joints)
+
+
+            self.pose_3d_predicted_json = pose_3d_predicted_json.toJson()
+            self.pose_3d_measured_json = pose_3d_measured_json.toJson()
             self.skeleton_ID_tracker_json = skeleton_ID_tracker_json.toJson()
             self.publish()
         self.frame_color = img_all.copy()
@@ -443,7 +453,9 @@ class VideoInfer:
         return heatmaps, pafs, scale, pad
 
     def publish(self):
-        self.mqtt_publish("/pose_cam/triangulate/pose_3d", self.pose3d_json)
+        self.mqtt_publish("/pose_cam/triangulate/pose_3d_predicted", self.pose_3d_predicted_json)
+        self.mqtt_publish("/pose_cam/triangulate/pose_3d_measured", self.pose_3d_measured_json)
+
         self.mqtt_publish("/pose_cam/triangulate/skeletonIDTracker", self.skeleton_ID_tracker_json)
             
     def mqtt_publish(self, topic, pose3d_json):

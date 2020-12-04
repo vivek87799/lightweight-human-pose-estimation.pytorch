@@ -52,7 +52,7 @@ class KalmanFilter(object):
     Attributes: None
     """
 
-    def __init__(self):
+    def __init__(self, measurement_noise=0.1):
         """Initialize variable used by Kalman Filter class
         Return:
             None
@@ -87,7 +87,9 @@ class KalmanFilter(object):
                               [0, 0, 1, 0, 0, 0],
                               [0, 0, 0, 0, 1, 0]])
         # self.kf.R = np.diag((0.01, 0.01, 0.01)) # observation noise matrix
-        self.kf.R = np.diag((1, 1, 1))
+        self.kf.Q = np.diag((1, 1, 1))
+        self.kf.Q = block_diag(q, q)
+        self.kf.R = np.diag((0.15, 0.15, 0.15)) # observation noise matrix
         # print("observation noise matrix", self.kf.R)
         self.kf.x = np.array([[0, 0, 0, 0, 0, 0]]).T
         self.kf.P = np.eye(6) * 4

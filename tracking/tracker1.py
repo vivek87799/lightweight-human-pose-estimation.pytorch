@@ -8,7 +8,7 @@ class Track(object):
     """Track class for every object to be tracked
     """
 
-    def __init__(self, prediction, trackIdCount):
+    def __init__(self, prediction, trackIdCount, measurement_noise=0.1):
         """Initialize variables used by Track class
         Args:
             prediction: predicted centroids of object to be tracked
@@ -17,12 +17,14 @@ class Track(object):
             None
         """
         self.track_id = trackIdCount  # identification of each track object
-        self.KF = KalmanFilter()  # KF instance to track this object
+        self.measurement_noise = measurement_noise # R measurement noise for the KF
+        self.KF = KalmanFilter(self.measurement_noise)  # KF instance to track this object
         self.prediction = np.asarray(prediction)  # predicted centroids (x,y)
         self.prediction2d = ()  # predicted centroids (x,y)
         self.prediction3d = ()
         self.skipped_frames = 0  # number of frames skipped undetected
         self.min_hits = 0
+        self.max_age = 0
         self.trace = []  # trace path
         self.trace3d = []  # trace 3d path
         self.detection = prediction
@@ -35,7 +37,7 @@ class Tracker(object):
     """
 
     def __init__(self, dist_thresh, max_frames_to_skip, max_trace_length,
-                 trackIdCount):
+                 trackIdCount, measurement_noise=0.1):
         """Initialize variable used by Tracker class
         Args:
             dist_thresh: distance threshold. When exceeds the threshold,
@@ -53,8 +55,9 @@ class Tracker(object):
         self.tracks = []
         self.tracks3d = []
         self.trackIdCount = trackIdCount
+        self.measurement_noise = measurement_noise
 
-    def Update(self, detections, min_hit_criteria=50):
+    def Update(self, detections, min_hit_criteria=3):
         """Update tracks vector using following steps:
             - Create tracks if no tracks vector found
             - Calculate cost using sum of square distance
@@ -76,7 +79,7 @@ class Tracker(object):
         # Create tracks if no tracks vector found
         if len(self.tracks3d) == 0:
             for i in range(len(detections)):
-                track = Track(detections[i], self.trackIdCount)
+                track = Track(detections[i], self.trackIdCount, self.measurement_noise)
                 
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
@@ -126,6 +129,7 @@ class Tracker(object):
                 self.tracks3d[i].min_hits = self.tracks3d[i].min_hits + 1
 
                 if self.tracks3d[i].min_hits > min_hit_criteria:  # int(len())
+                    print("min hit criteria-->", min_hit_criteria)
                     self.tracks3d[i].max_age = 1
             else:
                 self.tracks3d[i].skipped_frames += 1
@@ -155,7 +159,7 @@ class Tracker(object):
         if len(un_assigned_detects) != 0:
             for i in range(len(un_assigned_detects)):
                 track = Track(detections[un_assigned_detects[i]],
-                              self.trackIdCount)
+                              self.trackIdCount, self.measurement_noise)
                 self.trackIdCount += 1
                 self.tracks3d.append(track)
 
@@ -167,8 +171,13 @@ class Tracker(object):
                 self.tracks3d[i].skipped_frames = 0
                 # TODO_ with the prediction update the 3d points
                 self.tracks3d[i].KF.correct(detections[assignment[i]], 1)
+                
                 _temp = self.tracks3d[i].KF.kf.x[[0, 2, 4]]
                 self.tracks3d[i].prediction = self.tracks3d[i].KF.kf.x[[0, 2, 4]]
+                """
+                _temp = self.tracks3d[i].KF.kf.x[[0, 1, 2]]
+                self.tracks3d[i].prediction = self.tracks3d[i].KF.kf.x[[0, 1, 2]]
+                """
             else:
                 # TODO_ with the prediction update the 3d points
                 self.tracks3d[i].KF.correct(self.tracks3d[i].KF.kf.x, 0)
