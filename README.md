@@ -11,6 +11,7 @@ This repository contains the implementation of 3D Multi-Person pose estimation u
 * [Requirements](#requirements)
 * [Prerequisites](#prerequisites)
 * [Working](#working)
+* [v04.12.2020] (#v04.12.2020)
 * [v03.12.2020](#v03.12.2020)
 * [v02.12.2020](#v02.12.2020)
 * [Python demo](#python-demo)
@@ -33,6 +34,13 @@ This repository contains the implementation of 3D Multi-Person pose estimation u
 * This version of the code uses the kalman filter for tracking the skeleton IDs(The mean of the skeleton joints are tracked)
 * The detected skeleton and the skeleton IDs are published on mqtt to the topics "/pose_cam/triangulate/pose_3d" and "/pose_cam/triangulate/skeletonIDTracker" respectively
 * The published skeleon can be visualized on ROS
+
+## v04.12.2020
+* branch develop/pythongpucmuinference
+* The Re-Identification now uses cosine similarity for cost matrix
+* This module uses a separate Skeleton Tracker and Joints Tracker for each skeleton across the frames.
+* The joints keeps drifting away as the velocity factor is also considered in the Kalman Filter. The velocity factor is to be removed in the next versions.
+* A bit more stable version
 
 ## v03.12.2020
 * branch develop/pythongpucmuinference
