@@ -20,6 +20,9 @@ This repository contains this repo contains module for tracking position of obje
 * Python 3.6
 * PyTorch 0.4.1 (should also work with 1.0, but not tested)
 
+## Evaluation
+* eval_log file has scrip and data for evaluation
+* Read the README.md in that folder for more info on the log
 
 ## v02.12.2020
 * branch develop/pythongpucmuinference
