@@ -6,6 +6,9 @@ import numpy as np
 import pyrealsense2 as rs
 import time
 
+import json
+
+from sklearn.preprocessing import Normalizer
 from realsense_device_manager_package.realsense_device_manager import DeviceManager
 from realsense_device_manager_package.helper_functions import pixel_to_camera_coordinate
 
@@ -20,6 +23,7 @@ from threading import Thread
 from mqtt_manager.tojson import SkeletonPoseToJson, SkeletonIDTrackerToJson
 from mqtt_manager.mqtt_client import MqttClient
 
+from helper_functions.extract_ground_truth import gen_ground_truth
 
 from models.with_mobilenet import PoseEstimationWithMobileNet
 from modules.keypoints import extract_keypoints, group_keypoints
@@ -54,6 +58,7 @@ class VideoGet:
 
 
 class VideoGetCMU:
+    frame_number = 0
     def __init__(self, streams=None):
         self.caps = []
         self.frames = {}
@@ -91,7 +96,7 @@ class VideoGetCMU:
         for cap in self.caps:
             ret, frame = cap.read()
             if ret:
-                frame = cv2.resize(frame, (0,0), fx=0.25, fy=0.25)
+                # frame = cv2.resize(frame, (0,0), fx=0.25, fy=0.25)
                 frames[self.streams[stream_id]] = frame 
                 stream_id = stream_id+1
                 frame_vis_raw.append(frame)
@@ -106,6 +111,7 @@ class VideoGetCMU:
                 # self.frames.append(frame)
             else:
                 self.stopped = True
+        VideoGetCMU.frame_number = self.frame_count
         self.frame_count = self.frame_count+1
         print("stream len ", len(self.streams), len(frames.keys()), self.frame_count)
         self.frames = copy.deepcopy(frames)
@@ -155,11 +161,14 @@ class VideoInfer:
         self.all_keypoints = []
         self.frame_vis = []
         self.pose3d_json = {}
+        self.pose3d_json_GT = {}
         self.skeleton_ID_tracker_json = []
         self.mqtt_client = MqttClient()
         self.feature_vectors = {}
         self.calibration_info_devices = None
         self.reid_images_all = {}
+        self.measured_pose_log = {}
+        self.GT_pose_log = {}
 
     def start(self):
         Thread(target=self.infer, args=()).start()
@@ -354,45 +363,64 @@ class VideoInfer:
                     ### qf_keypoints_np = qf_keypoints_np[gf_ids]
                 
                 # TODO correct implementation
-                """
+                # """
                 gf_ids = col_ind
                 qf_ids = row_ind
                 qf_keypoints_np = qf_keypoints_np[[k for k in row_ind]]
                 gf_keypoints_np = gf_keypoints_np[[k for k in col_ind]]
-                """
+                # """
                 print("min values-->",gf_ids.tolist(), type(self.reid_images_all[device]))
                 print(len(self.reid_images_all[device]))
                 try:
-                    gf_keypoints_np = gf_keypoints_np[gf_ids]
+                    #gf_keypoints_np = gf_keypoints_np[gf_ids]
                     self.reid_images_all[device] = np.asarray(self.reid_images_all[device])[gf_ids] # .tolist()
                 except Exception as error:
                     print("Erro in reordering", error)
                 # print(self.reid_images_all[device].shape)
             # Step 7: Find the 3D pose using triangulation 
-            qf_keypoints_np = qf_keypoints_np[[k for k in range(gf_keypoints_np.shape[0])]]
+            #qf_keypoints_np = qf_keypoints_np[[k for k in range(gf_keypoints_np.shape[0])]]
             pose_3d_json = SkeletonPoseToJson()
             skeleton_ID_tracker_json = SkeletonIDTrackerToJson()
             detections = []
             skeletons = []
+            measured_pose_log = {}
+            GT_pose_log = {}
+            
             for k in range(0, qf_keypoints_np.shape[0]):
                 skeleton = depth_from_triangulation(camera_pose_all_np, qf_keypoints_np[k].astype(np.float32), gf_keypoints_np[k].astype(np.float32))
                 # detections.append(skeleton.joints_centre)
                 skeletons.append(skeleton)
+                
                 # skeleton.joints is None if not assigned
                 if type(skeleton.joints) is np.ndarray: 
                     pose_3d_json.add_pose(k, np.transpose(skeleton.joints))
             
-            pose_3d_json = SkeletonPoseToJson()
+            pose_3d_json = SkeletonPoseToJson(str(VideoGetCMU.frame_number))
             # Update the Kalman Filter
             self.skeletons_tracker.Update(skeletons)
             for i, track in enumerate(self.skeletons_tracker.tracks3d):
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
                 pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
 
+                if track.track_id == 3:
+                    self.measured_pose_log[VideoGetCMU.frame_number] = np.transpose(skeleton.joints).tolist()
+
             self.pose3d_json = pose_3d_json.toJson()
             self.skeleton_ID_tracker_json = skeleton_ID_tracker_json.toJson()
+            print(VideoGetCMU.frame_number)
+            self.pose3d_json_GT = gen_ground_truth("../170228_haggling_b3/hdPose3d_stage1_coco19", VideoGetCMU.frame_number, self.GT_pose_log)
+            log_data = open("predicted_pose.json","a")
+            log_data.write(self.pose3d_json)
+            log_data.close()
             self.publish()
+            ##Log for evaluation###
+            if VideoGetCMU.frame_number == 2090:
+                with open("measured_pose_log.json", "a")as log:
+                    json.dump(self.measured_pose_log, log)
+                with open("GT_pose_log.json", "a")as log:
+                    json.dump(self.GT_pose_log, log)
         self.frame_color = img_all.copy()
+        
 
     def stop(self):
         self.stopped = True
@@ -447,7 +475,10 @@ class VideoInfer:
         return heatmaps, pafs, scale, pad
 
     def publish(self):
+        
         self.mqtt_publish("/pose_cam/triangulate/pose_3d_measured", self.pose3d_json)
+        self.mqtt_publish("/pose_cam/triangulate/pose_3d_GT", self.pose3d_json_GT)
+
         self.mqtt_publish("/pose_cam/triangulate/skeletonIDTracker", self.skeleton_ID_tracker_json)
             
     def mqtt_publish(self, topic, pose3d_json):
@@ -514,7 +545,7 @@ if __name__ == '__main__':
     
     _camera_pose = []
     for name in ["00_10", "00_11"]:
-        camera_pose = processing_loop(calib_file_name="../cmu_haggle/calibration_170228_haggling_b1.json", name=name)
+        camera_pose = processing_loop(calib_file_name="/home/metratec/Development/vivek_thesis/pose_estimation/170228_haggling_b3/calibration_170228_haggling_b3.json", name=name)
         print("camera_pose-->", camera_pose)
         _camera_pose.append(np.expand_dims(camera_pose, axis=0))
     
@@ -526,7 +557,7 @@ if __name__ == '__main__':
     #########
     # video_infer = VideoInfer(args, video_getter_cmu.frames, video_getter.device_manager.calibration_info_devices).start()
 
-    video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonsTracker=SkeletonsTracker(5, 10, 5, 1))
+    video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonsTracker=SkeletonsTracker(100, 10, 5, 1))
     # video_infer = VideoInfer(args, video_getter_cmu.frames, skeletonIDTracker=Tracker(100, 50, 30, 1))
     # video_infer.intrinsics_devices = video_getter.device_manager.intrinsics_devices
     # video_infer.depth_scale = video_getter.device_manager.depth_scale
