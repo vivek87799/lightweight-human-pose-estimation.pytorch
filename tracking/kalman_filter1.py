@@ -80,7 +80,7 @@ class KalmanFilter(object):
 
         # tracker.u = 0.
         q = Q_discrete_white_noise(dim=3, dt=dt, var=0.001)
-        self.kf.Q = block_diag(q, q)
+        self.kf.Q = block_diag(q, np.diag((1, 1, 1)))
         print("Process noise matrix", self.kf.Q)
 
         self.kf.H = np.array([[1, 0, 0, 0, 0, 0],
@@ -96,7 +96,6 @@ class KalmanFilter(object):
 
     def predict(self):
         """
-
         :return:
         """
         global _module_name
@@ -112,7 +111,6 @@ class KalmanFilter(object):
 
     def correct(self, b, flag):
         """
-
         :param b:
         :param flag:
         :return:

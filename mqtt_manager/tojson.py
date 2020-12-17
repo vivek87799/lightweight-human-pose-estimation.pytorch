@@ -23,7 +23,7 @@ class SkeletonIDTrackerToJson:
         self.header = Header(device)
         self.skeletonIDPosition = []
     
-    def add_skeleton_position(self, id, predicted_position, detected_position):
+    def add_skeleton_position(self, id, predicted_position, detected_position, ground_truth=None):
         self.skeletonIDPosition.append(IDPositionsDetectedPredicted(id, predicted_position, detected_position))
     
     def toJson(self):

@@ -96,7 +96,7 @@ class VideoGetCMU:
         for cap in self.caps:
             ret, frame = cap.read()
             if ret:
-                # frame = cv2.resize(frame, (0,0), fx=0.25, fy=0.25)
+                frame = cv2.resize(frame, (0,0), fx=0.25, fy=0.25)
                 frames[self.streams[stream_id]] = frame 
                 stream_id = stream_id+1
                 frame_vis_raw.append(frame)
@@ -111,6 +111,7 @@ class VideoGetCMU:
                 # self.frames.append(frame)
             else:
                 self.stopped = True
+        # input('Wait.. ')
         VideoGetCMU.frame_number = self.frame_count
         self.frame_count = self.frame_count+1
         print("stream len ", len(self.streams), len(frames.keys()), self.frame_count)
@@ -170,6 +171,9 @@ class VideoInfer:
         self.measured_pose_log = {}
         self.GT_pose_log = {}
 
+        self.measured_centre = {}
+        self.predicted_centre = {}
+        self.gt_centre = {}
     def start(self):
         Thread(target=self.infer, args=()).start()
         return self
@@ -399,16 +403,19 @@ class VideoInfer:
             # Update the Kalman Filter
             self.skeletons_tracker.Update(skeletons)
             for i, track in enumerate(self.skeletons_tracker.tracks3d):
+
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
                 pose_3d_json.add_pose(track.track_id, np.transpose(track.joints))
 
                 if track.track_id == 3:
                     self.measured_pose_log[VideoGetCMU.frame_number] = np.transpose(skeleton.joints).tolist()
+                    self.measured_centre[VideoGetCMU.frame_number] = track.detection.squeeze().tolist()
+                    self.predicted_centre[VideoGetCMU.frame_number] = track.prediction.squeeze().tolist()
 
             self.pose3d_json = pose_3d_json.toJson()
             self.skeleton_ID_tracker_json = skeleton_ID_tracker_json.toJson()
             print(VideoGetCMU.frame_number)
-            self.pose3d_json_GT = gen_ground_truth("../170228_haggling_b3/hdPose3d_stage1_coco19", VideoGetCMU.frame_number, self.GT_pose_log)
+            self.pose3d_json_GT = gen_ground_truth("../170228_haggling_b3/hdPose3d_stage1_coco19", VideoGetCMU.frame_number, self.GT_pose_log, self.gt_centre)
             log_data = open("predicted_pose.json","a")
             log_data.write(self.pose3d_json)
             log_data.close()
@@ -419,6 +426,14 @@ class VideoInfer:
                     json.dump(self.measured_pose_log, log)
                 with open("GT_pose_log.json", "a")as log:
                     json.dump(self.GT_pose_log, log)
+                with open("measured_centre.json", "a")as log:
+                    json.dump(self.measured_centre, log)
+                with open("predicted_centre.json", "a")as log:
+                    json.dump(self.predicted_centre, log)
+                with open("GT_centre.json", "a")as log:
+                    json.dump(self.gt_centre, log)
+                
+                
         self.frame_color = img_all.copy()
         
 
@@ -444,6 +459,7 @@ class VideoInfer:
 
 
             tensor_img = torch.from_numpy(padded_img).permute(2, 0, 1).unsqueeze(0).float()
+            print("input tensor shape for pe--->", tensor_img.shape)
             tensor_img_all.append(tensor_img)
 
         tensor_img_all = torch.cat(tensor_img_all, dim=0)
