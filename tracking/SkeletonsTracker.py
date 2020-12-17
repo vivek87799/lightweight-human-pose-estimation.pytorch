@@ -25,17 +25,20 @@ class Track(TrackParent):
         self.updateJoints(1.5, 20, 5, 10) # Should be a list of tracks
     
     def updateJoints(self, dist_thresh=None, max_frames_to_skip=None, max_trace_length=None, trackIdCount=None):
+        # Create a tracker for each joint
         if not self.joints_tracker:
-            self.joints_tracker = JointsTracker(dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount)
-        detections = []
-        for detection in self.joints.transpose().tolist():
-            # Check if the detection has -1 which indicates that the joint is missing so we 
-            # should not update the detection
+            joints_tracker = []
+            for i in range (0, len(self.joints.transpose().tolist())):
+                joints_tracker.append(JointsTracker(dist_thresh, max_frames_to_skip, max_trace_length, trackIdCount))
+            self.joints_tracker = joints_tracker
+        
+        ######
+        for i, detection in enumerate(self.joints.transpose().tolist()):
             if (-1 in detection):
-                continue
-            # print("joint detections to be updated", np.asarray(detection).reshape(3, 1))
-            detections.append(np.asarray(detection).reshape(3, 1))
-        self.joints_tracker.Update(detections)
+                self.joints_tracker[i].Update([])
+            else:
+                self.joints_tracker[i].Update([np.asarray(detection).reshape(3, 1)])
+        ######
         
 
 class Skeleton(object):

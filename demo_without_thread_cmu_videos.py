@@ -384,12 +384,15 @@ class VideoInfer:
             self.skeletons_tracker.Update(skeletons)
             for i, track in enumerate(self.skeletons_tracker.tracks3d):
                 skeleton_ID_tracker_json.add_skeleton_position(track.track_id, track.prediction.squeeze().tolist(), track.detection.squeeze().tolist())
-                print("joints from detections", np.transpose(track.joints).shape)
                 pose_3d_measured_json.add_pose(track.track_id, np.transpose(track.joints))
 
             pose_3d_predicted_json = SkeletonPoseToJson()
             for track in self.skeletons_tracker.tracks3d:
-                joints = track.joints_tracker.get_joints()
+                joints = []
+                for tracker in track.joints_tracker:
+                    joints.extend(tracker.get_joints())
+                joints = np.asarray(joints)
+                # joints = track.joints_tracker.get_joints()
                 print("joints from prediction", joints.shape)
                 pose_3d_predicted_json.add_pose(track.track_id, joints)
 

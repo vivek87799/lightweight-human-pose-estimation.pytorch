@@ -118,9 +118,12 @@ class Tracker(object):
         for i in range(len(assignment)):
             ## To keep the measure value
             # TODO
-            ## Read the KF params and please remove the below line as it is already stored some where
-            self.tracks3d[i].detection = np.asarray(detections[assignment[i]])
+            
+            
+            
             if assignment[i] != -1:
+                ## Read the KF params and please remove the below line as it is already stored some where
+                self.tracks3d[i].detection = np.asarray(detections[assignment[i]])
                 # check for cost distance threshold.
                 # If cost is very high then un_assign (delete) the track
                 if cost[i][assignment[i]] > self.dist_thresh:
@@ -132,6 +135,7 @@ class Tracker(object):
                     print("min hit criteria-->", min_hit_criteria)
                     self.tracks3d[i].max_age = 1
             else:
+                self.tracks3d[i].detection = np.asarray([[-1],[-1],[-1]])
                 self.tracks3d[i].skipped_frames += 1
                 if self.tracks3d[i].skipped_frames > int(self.tracks3d[i].skipped_frames):
                     self.tracks3d[i].min_hits = 0
